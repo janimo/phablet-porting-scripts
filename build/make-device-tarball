@@ -1,0 +1,94 @@
+#!/bin/bash
+# Make a device tarball from the Android build image and optionally
+# files for the Ubuntu root filesystem
+
+
+CONFFILE=${1:-ubuntu/tools/mktarball.conf}
+
+[ -f "$CONFFILE" ] || {
+	echo "Config file $CONFFILE not found"
+	exit 1
+}
+
+. $CONFFILE
+
+[ -n "$DEVICE" ] || {
+	echo "Variable DEVICE not set in config file"
+	exit 1
+}
+
+
+: ${PRODUCTDIR:=${PWD}/out/target/product/$DEVICE}
+
+[ -f $PRODUCTDIR/system.img ] || {
+	echo "$PRODUCTDIR does not seem to contain the required Android img files"
+	exit 1
+}
+
+TMPDEVICEDIR=$(mktemp -d)
+DEVICETARBALL=${PRODUCTDIR}/device_$DEVICE.tar.xz
+LXCPATH=${TMPDEVICEDIR}/system/var/lib/lxc/android
+
+# Ensure cleanup of temporary directory
+function onExit() {
+    rm -Rf $TMPDEVICEDIR
+}
+
+trap onExit EXIT
+
+mkdir -p ${LXCPATH}
+
+if file $PRODUCTDIR/system.img | grep ": data" >/dev/null; then
+	echo "Copying system.img into a proper EXT4 filesystem"
+	simg2img $PRODUCTDIR/system.img tmp.img >/dev/null
+	resize2fs -M tmp.img >/dev/null 2>&1
+	mv tmp.img $LXCPATH/system.img
+else
+	echo "Copying system.img which is already an EXT4 filesystem"
+	cp $PRODUCTDIR/system.img /$LXCPATH
+fi
+
+# Optionally copy partition images
+if [ -n "$PARTITIONS" ]; then
+	PDIR=${TMPDEVICEDIR}/partitions
+	mkdir -p $PDIR
+
+	for pair in $PARTITIONS;do
+		IFS=':' read src dest <<< $pair
+		echo "Copying partition $dest"
+		cp ${PRODUCTDIR}/$src $PDIR/$dest
+	done
+fi
+
+# Optionally copy files over the root filesystem
+if [ -d "$ROOTFSDIR" ]; then
+	echo "Copying files over the root filesystem"
+	cp -a $ROOTFSDIR/*/* ${TMPDEVICEDIR}/system/
+fi
+
+# Optionally generate a build ID based on the latest git commit
+if [ "$DEVICE_BUILD_ID" == "true" ]; then
+	git describe  --tags --dirty --always >> ${TMPDEVICEDIR}/system/etc/device-build
+fi
+
+echo "Creating the tarball"
+
+if which pxz >/dev/null; then
+	XZ=pxz
+	echo "Using parallel XZ compression"
+else
+	echo "Using single threaded XZ compression, you may want to install pxz"
+	XZ=xz
+fi
+
+pushd $TMPDEVICEDIR >/dev/null
+tar --use-compress-program=$XZ -cf $DEVICETARBALL $(find . -type f) --owner=0 --group=0
+popd >/dev/null
+
+# Optionally create ASCII armored detached GPG signature for the tarball
+# KEYPATH should hold the signing keys.
+if [ -d "$KEYPATH" ]; then
+	echo "Creating GPG signature for the device tarball"
+	gpg  --yes --homedir $KEYPATH -sba $DEVICETARBALL
+fi
+
