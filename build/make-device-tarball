@@ -38,7 +38,8 @@ trap onExit EXIT
 
 mkdir -p ${LXCPATH}
 
-if file $PRODUCTDIR/system.img | grep ": data" >/dev/null; then
+# Unless system.img is already a non-sparse ext4, convert it
+if file $PRODUCTDIR/system.img | grep -v ": Linux rev 1.0 ext4" >/dev/null; then
 	echo "Copying system.img into a proper EXT4 filesystem"
 	simg2img $PRODUCTDIR/system.img tmp.img >/dev/null
 	resize2fs -M tmp.img >/dev/null 2>&1
@@ -66,9 +67,12 @@ if [ -d "$ROOTFSDIR" ]; then
 	cp -a $ROOTFSDIR/*/* ${TMPDEVICEDIR}/system/
 fi
 
-# Optionally generate a build ID based on the latest git commit
+# Optionally generate a build ID based on the date and latest git commit
 if [ "$DEVICE_BUILD_ID" == "true" ]; then
-	git describe  --tags --dirty --always >> ${TMPDEVICEDIR}/system/etc/device-build
+	mkdir -p ${TMPDEVICEDIR}/system/etc
+	SERIAL="$(date +%Y%m%d)-$(git describe  --tags --dirty --always)"
+	echo "device-build: $SERIAL"
+	echo $SERIAL >> ${TMPDEVICEDIR}/system/etc/device-build
 fi
 
 echo "Creating the tarball"
@@ -82,7 +86,7 @@ else
 fi
 
 pushd $TMPDEVICEDIR >/dev/null
-tar --use-compress-program=$XZ -cf $DEVICETARBALL $(find . -type f) --owner=0 --group=0
+tar --use-compress-program=$XZ -cf $DEVICETARBALL $(find * -type f) --owner=0 --group=0
 popd >/dev/null
 
 # Optionally create ASCII armored detached GPG signature for the tarball
