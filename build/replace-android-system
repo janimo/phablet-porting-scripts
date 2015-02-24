@@ -34,7 +34,7 @@ wait_for_device
 echo "Mounting system partition"
 adb shell "mkdir /a; if [ -e emmc@android ]; then mount emmc@android /a; else mount /data; mount /data/system.img /a; fi"
 
-if file $SYSTEM_IMAGE | grep ": data" >/dev/null; then
+if file $SYSTEM_IMAGE | grep -v ": Linux rev 1.0 ext4" >/dev/null; then
     echo "Converting from sparse ext4 image to mountable ext4 image"
     simg2img $SYSTEM_IMAGE tmp.img >/dev/null
     resize2fs -M tmp.img >/dev/null 2>&1
