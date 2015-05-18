@@ -31,12 +31,14 @@ from launchpadlib.launchpad import Launchpad
 cachedir = "~/.launchpadlib/cache"
 
 def main():
-    usage = "Usage: %prog [-a|--arch <arch>] [-o|--output <dir>] [-t|--team <team>] [-p|--ppa <ppa>] <package> [release]"
+    usage = "Usage: %prog [-a|--arch <arch>] [-o|--output <dir>] [-d|--distro <distro>] [-t|--team <team>] [-p|--ppa <ppa] <package> [release]"
     opt_parser = OptionParser(usage)
     opt_parser.add_option('-a', '--arch', default='armhf', dest='ubuntu_arch',
                   help='Architecture for the binary package (default: armhf)')
     opt_parser.add_option('-o', '--output',
                   help='Directory used to output the desired package')
+    opt_parser.add_option('-d', '--distro',
+                  help='Distribution to use (default is ubuntu)', default='ubuntu')
     opt_parser.add_option('-t', '--team',
                   help='Launchpad team that owns the PPA (to be used with --ppa)')
     opt_parser.add_option('-p', '--ppa',
@@ -50,7 +52,7 @@ def main():
     # Login anonymously to LP
     lp = Launchpad.login_anonymously('pull-lp-bin', 'production',
                                       cachedir, version="devel")
-    distro = lp.distributions['ubuntu']
+    distro = lp.distributions[options.distro]
 
     if options.ppa and not options.team:
         print "To use a PPA you also need to provide a team (from Launchpad)"
