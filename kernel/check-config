@@ -341,3 +341,5 @@ fi
 if [ $fixes -gt 0 ];then
 	egreen "Made $fixes fixes.\n\n"
 fi
+
+ewhite " "
