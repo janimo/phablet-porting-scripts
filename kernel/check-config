@@ -278,7 +278,7 @@ for c in $CONFIGS_ON $CONFIGS_OFF;do
 	if [ $cnt -eq 0 ];then
 		if $write ; then
 			ewhite "Creating $c"
-			echo "# $c is not set" >> $FILE
+			echo "# $c is not set" >> "$FILE"
 			fixes=$((fixes+1))
 		else
 			ered "$c is neither enabled nor disabled in the config file"
@@ -288,12 +288,12 @@ for c in $CONFIGS_ON $CONFIGS_OFF;do
 done
 
 for c in $CONFIGS_ON;do
-	if grep "$c=y\|$c=m" $FILE >/dev/null;then
+	if grep "$c=y\|$c=m" "$FILE" >/dev/null;then
 		egreen "$c is already set"
 	else
 		if $write ; then
 			ewhite "Setting $c"
-			sed  -i "s,# $c is not set,$c=y," $FILE
+			sed  -i "s,# $c is not set,$c=y," "$FILE"
 			fixes=$((fixes+1))
 		else
 			ered "$c is not set, set it"
@@ -303,22 +303,33 @@ for c in $CONFIGS_ON;do
 done
 
 for c in $CONFIGS_EQ;do
-	if grep "$c" $FILE >/dev/null;then
-		egreen "$c is already set"
+	lhs=$(awk -F= '{ print $1 }' <(echo $c))
+	rhs=$(awk -F= '{ print $2 }' <(echo $c))
+	if grep "^$c" "$FILE" >/dev/null;then
+		egreen "$c is already set correctly."
+		continue
+	elif grep "^$lhs" "$FILE" >/dev/null;then
+		cur=$(awk -F= '{ print $2 }' <(grep "$lhs" "$FILE"))
+		ered "$lhs is set, but to $cur not $rhs."
+		if $write ; then
+			egreen "Setting $c correctly"
+			sed -i 's,^'"$lhs"'.*,# '"$lhs"' was '"$cur"'\n'"$c"',' "$FILE"
+			fixes=$((fixes+1))
+		fi
 	else
 		if $write ; then
 			ewhite "Setting $c"
-			echo  "$c" >> $FILE
+			echo  "$c" >> "$FILE"
 			fixes=$((fixes+1))
 		else
-			ered "$c is not set, set it"
+			ered "$c is not set"
 			errors=$((errors+1))
 		fi
 	fi
 done
 
 for c in $CONFIGS_OFF;do
-	if grep "$c=y\|$c=m" $FILE >/dev/null;then
+	if grep "$c=y\|$c=m" "$FILE" >/dev/null;then
 		if $write ; then
 			ewhite "Unsetting $c"
 			sed  -i "s,$c=.*,# $c is not set," $FILE
